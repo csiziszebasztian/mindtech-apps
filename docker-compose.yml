@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres-slq-mindtech-apps
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_DB: mindtech-apps
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - 6543:5432
+    networks:
+      - mindtech-apps-network
+    restart: unless-stopped
+
+  spring-boot-app:
+    build:
+      context: ./mindtech-apps-srv
+    container_name: mindtech-apps-srv
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/mindtech-apps
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+    ports:
+      - 8088:8080
+    networks:
+      - mindtech-apps-network
+    restart: unless-stopped
+
+  keycloak:
+    image: jboss/keycloak:latest
+    container_name: keycloak
+    environment:
+      KEYCLOAK_USER: admin
+      KEYCLOAK_PASSWORD: admin
+      DB_VENDOR: POSTGRES
+      DB_ADDR: postgres
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KEYCLOAK_IMPORT: /config/realm-export.json
+    volumes:
+      - ./keycloak-realm:/config
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres
+    networks:
+      - mindtech-apps-network
+    restart: unless-stopped
+
+  nextjs-app:
+    build:
+      context: ./mindtech-apps-clnt
+    container_name: mindtech-apps-srv-clnt
+    environment:
+      - NEXT_PUBLIC_KEYCLOAK_URL=http://keycloak:8080/auth
+      - NEXT_PUBLIC_KEYCLOAK_REALM=your-realm
+      - NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=your-client-id
+    ports:
+      - 3000:3000
+    depends_on:
+      - keycloak
+    networks:
+      - mindtech-apps-network
+    restart: unless-stopped
+
+networks:
+  mindtech-apps-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
